@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import api from '@/lib/api';
 import { User } from '@/types';
 
@@ -19,15 +19,17 @@ export const useAuthStore = create<AuthState>()(
       refreshToken: null,
       login: async (email, password) => {
         const { data } = await api.post('/auth/login', { email, password });
-        localStorage.setItem('accessToken', data.accessToken);
-        localStorage.setItem('refreshToken', data.refreshToken);
         set({ user: data.user, accessToken: data.accessToken, refreshToken: data.refreshToken });
       },
       logout: () => {
-        localStorage.clear();
+        sessionStorage.clear();
         set({ user: null, accessToken: null, refreshToken: null });
       },
     }),
-    { name: 'auth-store', partialize: (s) => ({ user: s.user, accessToken: s.accessToken, refreshToken: s.refreshToken }) }
+    {
+      name: 'auth-store',
+      storage: createJSONStorage(() => sessionStorage),
+      partialize: (s) => ({ user: s.user, accessToken: s.accessToken, refreshToken: s.refreshToken }),
+    }
   )
 );

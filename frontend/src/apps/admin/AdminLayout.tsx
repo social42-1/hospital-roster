@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth';
-import { LayoutDashboard, CalendarDays, Users, ClipboardList, Hospital, LogOut } from 'lucide-react';
+import { useThemeStore } from '@/store/theme';
+import { LayoutDashboard, CalendarDays, Users, ClipboardList, Hospital, LogOut, Sun, Moon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -12,12 +13,13 @@ const navItems = [
 
 export default function AdminLayout() {
   const { user, logout } = useAuthStore();
+  const { isDark, toggle } = useThemeStore();
   const navigate = useNavigate();
 
   const handleLogout = () => { logout(); navigate('/login'); };
 
   return (
-    <div className="flex h-screen bg-slate-50">
+    <div className="flex h-screen bg-slate-50 dark:bg-slate-950">
       {/* Sidebar */}
       <aside className="w-64 bg-slate-900 flex flex-col shrink-0">
         <div className="px-6 py-5 border-b border-slate-700/50">
@@ -54,6 +56,13 @@ export default function AdminLayout() {
             <p className="text-white text-sm font-medium truncate">{user?.name}</p>
             <p className="text-slate-400 text-xs truncate">{user?.email}</p>
           </div>
+          <button
+            onClick={toggle}
+            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+          >
+            {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            {isDark ? 'Light mode' : 'Dark mode'}
+          </button>
           <button
             onClick={handleLogout}
             className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"

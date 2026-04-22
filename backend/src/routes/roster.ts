@@ -2,9 +2,9 @@ import { Router, Response } from 'express';
 import { requireAdmin, requireAuth } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../types';
-import { generateRoster, DoctorInfo } from '../services/rosterEngine';
+import { generateRoster, DoctorInfo, LeaveConstraint } from '../services/rosterEngine';
 import { validateRoster } from '../services/rosterValidator';
-import { Grade, RosterStatus, ShiftType } from '@prisma/client';
+import { Grade, LeaveStatus, RosterStatus, ShiftType } from '@prisma/client';
 
 const router = Router();
 
@@ -33,7 +33,23 @@ router.post('/generate', requireAdmin, async (req: AuthRequest, res: Response) =
   }));
 
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  const grid = generateRoster(doctorInfos, daysInMonth);
+
+  // Fetch pending and approved leaves for this month so the engine can
+  // avoid assigning NIGHT shifts to doctors on or around their leave days.
+  const monthStart = new Date(Date.UTC(year, month - 1, 1));
+  const monthEnd = new Date(Date.UTC(year, month, 1));
+  const pendingLeaves = await prisma.leave.findMany({
+    where: {
+      status: { in: [LeaveStatus.PENDING, LeaveStatus.APPROVED] },
+      date: { gte: monthStart, lt: monthEnd },
+    },
+  });
+  const leaveConstraints: LeaveConstraint[] = pendingLeaves.map((l) => ({
+    userId: l.userId,
+    dayIndex: new Date(l.date).getUTCDate() - 1,
+  }));
+
+  const grid = generateRoster(doctorInfos, daysInMonth, leaveConstraints);
   const violations = validateRoster(grid, doctorInfos);
 
   // Persist to DB
@@ -92,6 +108,15 @@ router.put('/:id/publish', requireAdmin, async (req: AuthRequest, res: Response)
   const roster = await prisma.roster.update({
     where: { id: req.params.id },
     data: { status: RosterStatus.PUBLISHED },
+  });
+  res.json(roster);
+});
+
+// PUT /roster/:id/unpublish — admin reverts to draft
+router.put('/:id/unpublish', requireAdmin, async (req: AuthRequest, res: Response) => {
+  const roster = await prisma.roster.update({
+    where: { id: req.params.id },
+    data: { status: RosterStatus.DRAFT },
   });
   res.json(roster);
 });

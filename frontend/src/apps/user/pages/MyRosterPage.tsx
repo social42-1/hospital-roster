@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
-import { Roster } from '@/types';
+import { Roster, ShiftType } from '@/types';
 import { ShiftBadge } from '@/components/ShiftBadge';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
@@ -12,6 +12,7 @@ export default function MyRosterPage() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
+  const [filterShift, setFilterShift] = useState<ShiftType | null>(null);
   const user = useAuthStore((s) => s.user);
 
   const { data: roster, isLoading } = useQuery<Roster>({
@@ -39,14 +40,14 @@ export default function MyRosterPage() {
     <div className="p-6 max-w-4xl">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">My Roster</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">My Roster</h1>
           <p className="text-slate-500 text-sm mt-1">Your personal schedule</p>
         </div>
         <div className="flex gap-2">
-          <select value={month} onChange={e => setMonth(+e.target.value)} className="px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white">
+          <select value={month} onChange={e => setMonth(+e.target.value)} className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 text-sm bg-white dark:bg-slate-800 dark:text-slate-200">
             {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
           </select>
-          <select value={year} onChange={e => setYear(+e.target.value)} className="px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white">
+          <select value={year} onChange={e => setYear(+e.target.value)} className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 text-sm bg-white dark:bg-slate-800 dark:text-slate-200">
             {[year - 1, year, year + 1].map(y => <option key={y} value={y}>{y}</option>)}
           </select>
         </div>
@@ -66,6 +67,21 @@ export default function MyRosterPage() {
         ))}
       </div>
 
+      {roster && (
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">Show</span>
+          {([null, 'MORNING', 'NIGHT', 'OFF', 'WO', 'LEAVE'] as (ShiftType | null)[]).map((s) => (
+            <button
+              key={s ?? 'ALL'}
+              onClick={() => setFilterShift(s === filterShift ? null : s)}
+              className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${filterShift === s ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+            >
+              {s ?? 'All'}
+            </button>
+          ))}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="flex justify-center py-12"><Spinner className="w-6 h-6" /></div>
       ) : !roster ? (
@@ -84,8 +100,9 @@ export default function MyRosterPage() {
                 const key = format(d, 'yyyy-MM-dd');
                 const shift = shiftByDate[key];
                 const isToday = format(now, 'yyyy-MM-dd') === key;
+                const dimmed = filterShift && shift !== filterShift;
                 return (
-                  <div key={key} className={`rounded-xl p-2 text-center border ${isToday ? 'border-indigo-300 bg-indigo-50' : 'border-slate-100 bg-slate-50/50'}`}>
+                  <div key={key} className={`rounded-xl p-2 text-center border transition-opacity ${dimmed ? 'opacity-20' : ''} ${isToday ? 'border-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 dark:border-indigo-700' : 'border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50'}`}>
                     <p className={`text-xs font-medium mb-1 ${isToday ? 'text-indigo-600' : 'text-slate-500'}`}>{format(d, 'd')}</p>
                     {shift ? <ShiftBadge type={shift as any} className="mx-auto" /> : <span className="text-slate-300 text-xs">—</span>}
                   </div>

@@ -30,10 +30,11 @@ export function validateRoster(
       violations.push({ rule: 'R1', day, message: `Day ${day + 1}: Need exactly 1 Senior on Night, got ${nightSeniorsFixed.length}` });
     }
 
-    // Rule 2: After NIGHT → must be OFF next day
+    // Rule 2: After NIGHT → must be OFF (or LEAVE) next day
     if (day < grid.length - 1) {
       for (const doc of doctors) {
-        if (schedule[doc.id] === ShiftType.NIGHT && grid[day + 1][doc.id] !== ShiftType.OFF) {
+        const nextShift = grid[day + 1][doc.id];
+        if (schedule[doc.id] === ShiftType.NIGHT && nextShift !== ShiftType.OFF && nextShift !== ShiftType.LEAVE) {
           violations.push({ rule: 'R2', day, doctorId: doc.id, message: `${doc.name} on Night day ${day + 1} but not OFF on day ${day + 2}` });
         }
       }
@@ -49,7 +50,7 @@ export function validateRoster(
       violations.push({ rule: 'R3', day, message: `Day ${day + 1}: No Senior on Morning` });
     }
 
-    // Rule 5: Max 1 shift per day
+    // Rule 5: Every doctor must have a shift (LEAVE counts as a valid assignment)
     for (const doc of doctors) {
       if (!schedule[doc.id]) {
         violations.push({ rule: 'R5', day, doctorId: doc.id, message: `${doc.name} has no shift on day ${day + 1}` });
@@ -57,7 +58,7 @@ export function validateRoster(
     }
   }
 
-  // Rule 4: WO count 6–7 per doctor
+  // Rule 4: WO count 6–7 per doctor (LEAVE days are not counted as WOs)
   for (const doc of doctors) {
     const woCount = grid.filter((day) => day[doc.id] === ShiftType.WO).length;
     if (woCount < 6 || woCount > 7) {

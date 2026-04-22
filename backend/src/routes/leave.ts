@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { requireAdmin, requireAuth } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../types';
-import { LeaveStatus, Grade, ShiftType } from '@prisma/client';
+import { LeaveStatus, Grade, RosterStatus, ShiftType } from '@prisma/client';
 import { applyLeaveAndRepair } from '../services/rosterRepairer';
 import { DoctorInfo, RosterGrid, DaySchedule } from '../services/rosterEngine';
 
@@ -15,6 +15,24 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
     res.status(400).json({ error: 'date and reason required' });
     return;
   }
+
+  // Block submission if the roster for that month is already published
+  const leaveDate = new Date(date);
+  const month = leaveDate.getUTCMonth() + 1;
+  const year = leaveDate.getUTCFullYear();
+
+  const roster = await prisma.roster.findUnique({
+    where: { month_year: { month, year } },
+    select: { status: true },
+  });
+
+  if (roster?.status === RosterStatus.PUBLISHED) {
+    res.status(409).json({
+      error: 'The roster for this month is already published. Leave requests can only be submitted before the roster is published.',
+    });
+    return;
+  }
+
   const leave = await prisma.leave.create({
     data: {
       userId: req.user!.userId,

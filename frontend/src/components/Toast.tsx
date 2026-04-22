@@ -34,7 +34,7 @@ export function ToastProvider() {
           className={cn(
             'flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border text-sm font-medium',
             'data-[state=open]:animate-in data-[state=closed]:animate-out',
-            t.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'
+            t.type === 'success' ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300' : 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300'
           )}
         >
           {t.type === 'success' ? <CheckCircle className="w-4 h-4 flex-shrink-0" /> : <XCircle className="w-4 h-4 flex-shrink-0" />}
