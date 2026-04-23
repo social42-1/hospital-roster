@@ -5,6 +5,7 @@ import api from '@/lib/api';
 import { Leave } from '@/types';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { X } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/Toast';
@@ -45,7 +46,7 @@ export default function LeavePage() {
         <p className="text-slate-500 text-sm mt-1">Approve or reject leave requests — roster updates automatically</p>
       </div>
 
-      <div className="flex gap-2 mb-4">
+      <div className="flex items-center gap-2 mb-4">
         {(['ALL', 'PENDING', 'APPROVED', 'REJECTED'] as Filter[]).map(f => (
           <button
             key={f}
@@ -55,6 +56,15 @@ export default function LeavePage() {
             {f} <span className="ml-1 opacity-70">{counts[f]}</span>
           </button>
         ))}
+        {filter !== 'ALL' && (
+          <button
+            onClick={() => setFilter('ALL')}
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-500 dark:text-gray-400 hover:text-slate-700 dark:hover:text-gray-200 hover:bg-slate-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <X className="w-3.5 h-3.5" />
+            Clear
+          </button>
+        )}
       </div>
 
       <Card>
