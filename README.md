@@ -52,7 +52,49 @@ npm start       # NODE_ENV=production — Express serves frontend + API on port 
 
 ## Architecture
 
-### Directory structure
+### 1. System Overview
+
+```mermaid
+graph TD
+    Browser["Browser"]
+
+    subgraph Dev["Development"]
+        Vite["Vite Dev Server\n:5173"]
+        Proxy["Proxy /api → :4000"]
+    end
+
+    subgraph Prod["Production"]
+        Express["Express :4000\nserves frontend/dist/"]
+    end
+
+    subgraph Backend["Backend (Express + TypeScript)"]
+        Auth["routes/auth.ts\nPOST /api/auth/*"]
+        Users["routes/users.ts\nGET|POST|DELETE /api/users"]
+        Roster["routes/roster.ts\nGET|POST|PUT /api/roster/*"]
+        Leave["routes/leave.ts\nGET|POST|PUT /api/leave/*"]
+
+        Engine["rosterEngine.ts\n5-phase generator"]
+        Validator["rosterValidator.ts\nR1–R6 checks"]
+        Repairer["rosterRepairer.ts\nleave repair"]
+
+        MW["middleware/auth.ts\nrequireAuth / requireAdmin"]
+    end
+
+    Prisma["Prisma ORM"]
+    DB[("PostgreSQL")]
+
+    Browser -->|dev| Vite
+    Vite --> Proxy --> Backend
+    Browser -->|prod| Express --> Backend
+    Auth & Users & Roster & Leave --> MW
+    Roster --> Engine --> Validator
+    Leave --> Repairer
+    Backend --> Prisma --> DB
+```
+
+---
+
+### 2. Directory Structure
 
 ```
 hospital-roster/
@@ -64,194 +106,436 @@ hospital-roster/
 │   └── src/
 │       ├── app.ts                 # Express entry point
 │       ├── routes/
-│       │   ├── auth.ts            # /api/auth
-│       │   ├── users.ts           # /api/users
-│       │   ├── roster.ts          # /api/roster
-│       │   └── leave.ts           # /api/leave
+│       │   ├── auth.ts            # /api/auth — login + refresh
+│       │   ├── users.ts           # /api/users — CRUD doctors
+│       │   ├── roster.ts          # /api/roster — generate, publish, shift edit
+│       │   └── leave.ts           # /api/leave — submit, approve, reject
 │       ├── services/
-│       │   ├── rosterEngine.ts    # Schedule generation algorithm
+│       │   ├── rosterEngine.ts    # 5-phase schedule generator
 │       │   ├── rosterValidator.ts # Constraint checker (R1–R6)
-│       │   └── rosterRepairer.ts  # Leave-approval repair logic
+│       │   └── rosterRepairer.ts  # Leave-approval roster repair
 │       ├── middleware/
-│       │   ├── auth.ts            # requireAuth / requireAdmin guards
-│       │   └── errorHandler.ts    # Global error handler
+│       │   ├── auth.ts            # requireAuth / requireAdmin
+│       │   └── errorHandler.ts    # Global async error handler
 │       └── lib/
 │           └── prisma.ts          # Prisma client singleton
 └── frontend/
     └── src/
         ├── apps/
-        │   ├── admin/             # Admin portal (Layout + 4 pages)
-        │   └── user/              # Doctor portal (Layout + 3 pages)
+        │   ├── admin/             # AdminLayout + Dashboard, Roster, Staff, Leave
+        │   └── user/              # UserLayout + MyRoster, TeamRoster, LeaveRequest
         ├── components/
         │   ├── RosterGrid.tsx     # Scrollable shift table
         │   ├── MonthPicker.tsx    # Horizontal month pill selector
         │   ├── ShiftBadge.tsx     # Coloured shift type pill
+        │   ├── Toast.tsx          # Toast notification provider + hook
         │   └── ui/                # Button, Card, Badge, Input, Modal, Spinner
         ├── lib/
-        │   └── api.ts             # Axios instance + token interceptors
+        │   └── api.ts             # Axios instance + request/response interceptors
         ├── store/
-        │   ├── auth.ts            # Zustand auth store (sessionStorage)
-        │   └── theme.ts           # Dark mode toggle
-        ├── types/index.ts         # Shared TypeScript interfaces + enums
-        └── router.tsx             # React Router v7 config + role guards
+        │   ├── auth.ts            # Zustand auth store → sessionStorage
+        │   └── theme.ts           # Zustand dark mode → localStorage
+        ├── types/index.ts         # Shared TS interfaces + enums
+        └── router.tsx             # React Router v7 + RequireRole guards
 ```
 
 ---
 
-### Backend
+### 3. Database Schema
 
-**Entry point — `app.ts`**
+```mermaid
+erDiagram
+    User {
+        string id PK
+        string name
+        string email UK
+        string password
+        Role role
+        Grade grade "nullable — null for ADMIN"
+        DateTime createdAt
+        DateTime updatedAt
+    }
 
-Express is configured with:
-- JSON body parsing
-- CORS locked to `http://localhost:5173` in development only
-- All routes prefixed `/api`
-- In production (`NODE_ENV=production`) Express serves `frontend/dist/` as static files and catches all non-API routes with `index.html` (SPA fallback)
-- Global `errorHandler` middleware catches any unhandled async errors via `express-async-errors`
+    Roster {
+        string id PK
+        int month "1–12"
+        int year
+        RosterStatus status "DRAFT | PUBLISHED"
+        DateTime createdAt
+        DateTime updatedAt
+    }
+
+    Shift {
+        string id PK
+        string rosterId FK
+        string userId FK
+        Date date
+        ShiftType type "MORNING|NIGHT|OFF|WO|LEAVE"
+    }
+
+    Leave {
+        string id PK
+        string userId FK
+        Date date
+        string reason
+        LeaveStatus status "PENDING|APPROVED|REJECTED"
+        DateTime createdAt
+        DateTime updatedAt
+    }
+
+    User ||--o{ Shift : "has"
+    User ||--o{ Leave : "requests"
+    Roster ||--o{ Shift : "contains"
+```
+
+**Constraints:**
+- `Roster @@unique([month, year])` — one roster per calendar month
+- `Shift @@unique([rosterId, userId, date])` — one shift per doctor per day
+- `User.email` is unique
+- Cascade deletes: `Roster` → `Shift`; `User` → `Shift`, `Leave`
 
 ---
 
-**Database schema (Prisma)**
+### 4. Authentication Flow
 
-| Model | Key fields | Notes |
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant A as api.ts (Axios)
+    participant BE as Express Backend
+    participant DB as PostgreSQL
+
+    Note over B,DB: Login
+    B->>A: login(email, password)
+    A->>BE: POST /api/auth/login
+    BE->>DB: findUnique({ where: { email } })
+    DB-->>BE: User row
+    BE->>BE: bcrypt.compareSync(password, hash)
+    BE-->>A: { accessToken (15m), refreshToken (7d), user }
+    A->>B: store in sessionStorage (auth-store)
+
+    Note over B,DB: Authenticated Request
+    B->>A: api.get('/roster/4/2026')
+    A->>A: read accessToken from sessionStorage
+    A->>BE: GET /api/roster/4/2026\nAuthorization: Bearer <accessToken>
+    BE->>BE: requireAuth — jwt.verify(token, JWT_SECRET)
+    BE->>DB: query shifts
+    DB-->>BE: data
+    BE-->>A: 200 roster data
+    A-->>B: response
+
+    Note over B,DB: Token Expired — Silent Refresh
+    B->>A: api.get('/roster/4/2026')
+    A->>BE: GET /api/roster/4/2026 (expired token)
+    BE-->>A: 401 Unauthorized
+    A->>A: _retry guard — attempt once
+    A->>BE: POST /api/auth/refresh\n{ refreshToken }
+    BE->>BE: jwt.verify(refreshToken, JWT_REFRESH_SECRET)
+    BE-->>A: { accessToken (new) }
+    A->>A: update sessionStorage with new accessToken
+    A->>BE: retry GET /api/roster/4/2026 (new token)
+    BE-->>A: 200 roster data
+    A-->>B: transparent response
+
+    Note over B,DB: Refresh Fails → Logout
+    A->>BE: POST /api/auth/refresh (invalid/expired)
+    BE-->>A: 401
+    A->>A: sessionStorage.clear()
+    A->>B: window.location.href = '/login'
+```
+
+**Auth middleware chain:**
+
+| Middleware | Check | On fail |
 |---|---|---|
-| `User` | `id`, `name`, `email`, `password`, `role` (ADMIN\|DOCTOR), `grade` (JUNIOR\|SENIOR\|null) | `grade` is null for admins |
-| `Roster` | `id`, `month`, `year`, `status` (DRAFT\|PUBLISHED) | `@@unique([month, year])` — one roster per calendar month |
-| `Shift` | `id`, `rosterId`, `userId`, `date`, `type` (MORNING\|NIGHT\|OFF\|WO\|LEAVE) | `@@unique([rosterId, userId, date])` — one shift per doctor per day |
-| `Leave` | `id`, `userId`, `date`, `reason`, `status` (PENDING\|APPROVED\|REJECTED) | Approval triggers roster repair |
-
-Cascade deletes: deleting a `Roster` removes all its `Shift` rows. Deleting a `User` removes their shifts and leave records.
+| `requireAuth` | `Authorization: Bearer <token>` header present + `jwt.verify()` passes | 401 |
+| `requireAdmin` | calls `requireAuth` then checks `req.user.role === 'ADMIN'` | 403 |
 
 ---
 
-**Authentication**
+### 5. Frontend Routing
 
-- `POST /api/auth/login` — verifies bcrypt password, returns a short-lived access token (15 min) + long-lived refresh token (7 days), plus the user object
-- `POST /api/auth/refresh` — accepts a refresh token, issues a new access token
-- `requireAuth` middleware — validates `Authorization: Bearer <token>` on every protected route; attaches `req.user` (`{ userId, role }`)
-- `requireAdmin` middleware — calls `requireAuth` then checks `role === 'ADMIN'`; returns 403 otherwise
+```mermaid
+graph LR
+    Root["/"] -->|redirect| Login["/login\nLoginPage"]
 
----
+    Login -->|role=ADMIN| Admin
+    Login -->|role=DOCTOR| User
 
-**Roster generation pipeline — `rosterEngine.ts`**
+    subgraph Admin["RequireRole: ADMIN"]
+        AL["AdminLayout\nsidebar + outlet"]
+        AL --> D["/admin\nDashboard"]
+        AL --> R["/admin/roster\nRosterPage"]
+        AL --> S["/admin/staff\nStaffPage"]
+        AL --> L["/admin/leave\nLeavePage"]
+    end
 
-The core data structure is:
+    subgraph User["RequireRole: DOCTOR"]
+        UL["UserLayout\nsidebar + outlet"]
+        UL --> MR["/user\nMyRosterPage"]
+        UL --> TR["/user/team\nTeamRosterPage"]
+        UL --> LR["/user/leave\nLeaveRequestPage"]
+    end
 
-```ts
-type DaySchedule = Record<string, ShiftType>; // userId → ShiftType
-type RosterGrid  = DaySchedule[];             // index 0 = day 1 of the month
+    style Admin fill:#eef2ff,stroke:#6366f1
+    style User fill:#f0fdf4,stroke:#22c55e
 ```
 
-`generateRoster()` picks one of **12 pre-defined `TemplateParams`** at random on each call (varying `juniorOffset`, `seniorOffset`, `woShift`), so regenerating always produces a different schedule. It then runs five phases:
-
-**Phase 1+2 — Night assignment + eager post-night OFF**
-
-For each day, `pickRotationCandidate()` selects one Junior and one Senior for NIGHT using a round-robin offset from the template. A candidate is skipped if:
-- They are already marked OFF (from yesterday's NIGHT recovery)
-- They have a leave constraint on today
-- They have a leave constraint on tomorrow (which would push the post-night OFF onto their leave day)
-
-Immediately after assigning NIGHT, the next day's slot for both doctors is set to OFF. This eager write means Phase 1 can see the OFF when picking candidates for day+1, eliminating the need for a separate pass.
-
-**Pre-mark leave days — between Phase 2 and 3**
-
-After all NIGHT/OFF pairs are placed, any slot for a doctor with a leave constraint on that day is overwritten with LEAVE — unless it is NIGHT (that case is deferred to leave-approval repair).
-
-**Phase 3 — WO distribution (6–7 per doctor)**
-
-For each doctor, eligible days are those with no shift yet where at least one other same-grade doctor is available for MORNING. WOs are spread evenly across those days using an index step (`rotated.length / target`), shifted by `woShift` from the template for variety.
-
-**Phase 4 — MORNING fill**
-
-Every remaining empty slot is filled with MORNING.
-
-**Phase 5 — Morning coverage repair**
-
-For each day, if no Junior (or no Senior) is on MORNING, the first WO doctor of that grade on that day is converted to MORNING.
-
-After generation, `validateRoster()` runs the full constraint check and returns any `Violation[]`. Violations are returned alongside the saved roster in the API response but do **not** block saving.
+`RequireRole` logic: if `useAuthStore().user` is null → redirect `/login`; if role mismatch → redirect to own portal root (`/admin` or `/user`).
 
 ---
 
-**Roster constraint rules**
+### 6. Backend — Entry Point (`app.ts`)
 
-| Rule | Description |
+```
+Request
+  │
+  ├─ CORS (dev only — origin: http://localhost:5173)
+  ├─ express.json()
+  ├─ /api/auth   → routes/auth.ts    (public)
+  ├─ /api/users  → routes/users.ts   (requireAuth / requireAdmin)
+  ├─ /api/roster → routes/roster.ts  (requireAuth / requireAdmin)
+  ├─ /api/leave  → routes/leave.ts   (requireAuth / requireAdmin)
+  ├─ /api/health → 200 { status: ok }
+  ├─ [prod] express.static(frontend/dist/)
+  ├─ [prod] * → index.html (SPA fallback)
+  └─ errorHandler (express-async-errors catches all throws)
+```
+
+---
+
+### 7. API Routes — Full Detail
+
+#### Auth (`routes/auth.ts`)
+
+| Method | Path | Auth | Request | Response |
+|---|---|---|---|---|
+| POST | `/api/auth/login` | public | `{ email, password }` | `{ accessToken, refreshToken, user }` |
+| POST | `/api/auth/refresh` | public | `{ refreshToken }` | `{ accessToken }` |
+
+#### Users (`routes/users.ts`)
+
+| Method | Path | Auth | Request | Response | Notes |
+|---|---|---|---|---|---|
+| GET | `/api/users` | requireAuth | — | `User[]` | ADMIN sees all doctors; DOCTOR sees only self |
+| POST | `/api/users` | requireAdmin | `{ name, email, password, grade }` | `User` | bcrypt hash cost 10; grade must be JUNIOR or SENIOR |
+| DELETE | `/api/users/:id` | requireAdmin | — | `{ message }` | Cascade deletes shifts + leaves |
+
+#### Roster (`routes/roster.ts`)
+
+| Method | Path | Auth | Request | Response | Notes |
+|---|---|---|---|---|---|
+| POST | `/api/roster/generate` | requireAdmin | `{ month, year }` | `{ roster, violations[] }` | Deletes existing roster first; runs engine + validator |
+| GET | `/api/roster` | requireAdmin | — | `Roster[]` | Summary only (no shifts); ordered year/month desc |
+| GET | `/api/roster/:month/:year` | requireAuth | — | `Roster` with `shifts[]` | Doctors get 404 for DRAFT rosters |
+| PUT | `/api/roster/:id/publish` | requireAdmin | — | `Roster` | DRAFT → PUBLISHED |
+| PUT | `/api/roster/:id/unpublish` | requireAdmin | — | `Roster` | PUBLISHED → DRAFT |
+| PUT | `/api/roster/shift/:id` | requireAdmin | `{ type: ShiftType }` | `Shift` | Manual single-shift override |
+
+#### Leave (`routes/leave.ts`)
+
+| Method | Path | Auth | Request | Response | Notes |
+|---|---|---|---|---|---|
+| POST | `/api/leave` | requireAuth | `{ date, reason }` | `Leave` | Blocked if roster for that month is PUBLISHED |
+| GET | `/api/leave` | requireAuth | — | `Leave[]` | ADMIN: all leaves + user details; DOCTOR: own only |
+| PUT | `/api/leave/:id/approve` | requireAdmin | — | `Leave` | Triggers `applyLeaveAndRepair` + DB transaction |
+| PUT | `/api/leave/:id/reject` | requireAdmin | — | `Leave` | Status → REJECTED; no roster changes |
+
+---
+
+### 8. Roster Generation Pipeline
+
+```mermaid
+flowchart TD
+    A([Admin: POST /roster/generate]) --> B[Fetch all doctors + leave constraints]
+    B --> C[Pick 1 of 12 TemplateParams at random\njuniorOffset · seniorOffset · woShift]
+    C --> D
+
+    subgraph Engine["rosterEngine.ts — buildFromTemplate()"]
+        D["Phase 1+2: For each day\npickRotationCandidate → assign NIGHT\neagerly write OFF on day+1"]
+        D --> E["Pre-mark: overwrite leave days with LEAVE\n(skip if already NIGHT)"]
+        E --> F["Phase 3: distributeWOs per doctor\n6–7 WOs · index-step spread · woShift rotation"]
+        F --> G["Phase 4: fill remaining slots → MORNING"]
+        G --> H["Phase 5: repair missing morning coverage\nconvert WO → MORNING if no junior or senior on MORNING"]
+    end
+
+    H --> I["validateRoster() — check R1–R6\nreturn Violation[]"]
+    I --> J["Prisma: create Roster + Shifts in DB\nstatus = DRAFT"]
+    J --> K([Response: roster + violations])
+```
+
+**`pickRotationCandidate` skip conditions:**
+
+A doctor is skipped for NIGHT on day D if any of these are true:
+1. `grid[D][doctor] === OFF` — still recovering from yesterday's NIGHT
+2. Leave constraint exists for day D — they are on leave that day
+3. Leave constraint exists for day D+1 — assigning them NIGHT would force OFF onto their leave day
+
+If all candidates are constrained, the raw rotation slot is used as a fallback.
+
+**`distributeWOs` formula:**
+
+```
+step = eligibleDays.length / target
+WO assigned at: rotated[ floor(i * step) ] for i in 0..target-1
+```
+
+The `rotated` array is `eligibleDays` shifted by `woShift % eligibleDays.length`, ensuring different templates produce different WO patterns.
+
+---
+
+### 9. Roster Constraint Rules
+
+| Rule | What is checked |
 |---|---|
-| R1 | Exactly 1 Junior + 1 Senior on NIGHT each day |
-| R2 | Any doctor on NIGHT on day D must be OFF (or LEAVE) on day D+1 |
-| R3 | At least 1 Junior + 1 Senior on MORNING each day |
-| R4 | Each doctor must have 6–7 WOs per month |
-| R5 | Every doctor must have a shift assigned every day |
-| R6 | No doctor may have consecutive NIGHT shifts |
+| R1 | Exactly 1 Junior + exactly 1 Senior on NIGHT per day |
+| R2 | Every doctor on NIGHT on day D must be OFF or LEAVE on day D+1 |
+| R3 | At least 1 Junior + at least 1 Senior on MORNING per day |
+| R4 | Each doctor has between 6 and 7 WO shifts for the month |
+| R5 | Every doctor has a shift assigned for every day of the month |
+| R6 | No doctor has NIGHT on two consecutive days |
+
+Violations are returned in the API response alongside the saved roster but do **not** block saving or publishing.
 
 ---
 
-**Leave approval — `rosterRepairer.ts`**
+### 10. Leave Approval & Roster Repair
 
-When an admin approves a leave request, the route handler:
+```mermaid
+sequenceDiagram
+    participant Admin
+    participant BE as Backend (routes/leave.ts)
+    participant Rep as rosterRepairer.ts
+    participant DB as PostgreSQL
 
-1. Fetches all shifts for that month from DB and reconstructs the in-memory `RosterGrid`
-2. Calls `applyLeaveAndRepair(grid, doctorId, dayIndex, doctors)`:
-   - Marks `grid[dayIndex][doctorId] = LEAVE`
-   - **If the doctor was on NIGHT:** finds a same-grade replacement — prefers a MORNING doctor over a WO doctor, picks the one with the fewest nights this month to keep distribution balanced. The replacement is assigned NIGHT, given OFF the following day, and if that OFF displaces a WO, morning coverage for that next day is re-checked and repaired if needed. The approved doctor's own post-night OFF (if it existed) is lifted back to MORNING.
-   - **If the doctor was on MORNING:** checks whether same-grade MORNING coverage still holds; if not, converts a same-grade WO doctor to MORNING.
-3. Persists the entire repaired grid back to DB in a single Prisma `$transaction` using upserts on `[rosterId, userId, date]`
+    Admin->>BE: PUT /api/leave/:id/approve
+    BE->>DB: fetch leave record (userId, date)
+    BE->>DB: fetch all shifts for that month
+    BE->>BE: reconstruct RosterGrid from shifts
+    BE->>Rep: applyLeaveAndRepair(grid, doctorId, dayIndex, doctors)
 
-Doctors cannot submit leave for months where the roster is already PUBLISHED (enforced in `POST /api/leave`).
+    alt Doctor was on NIGHT
+        Rep->>Rep: Find same-grade replacement\n(MORNING preferred over WO;\nfewest nights this month wins)
+        Rep->>Rep: replacement → NIGHT
+        Rep->>Rep: replacement[day+1] → OFF
+        Rep->>Rep: if day+1 was WO: re-check morning coverage\nconvert another WO → MORNING if needed
+        Rep->>Rep: lift doctor's post-night OFF → MORNING
+    else Doctor was on MORNING
+        Rep->>Rep: check same-grade MORNING coverage\nif missing: convert a WO → MORNING
+    end
 
----
+    Rep->>Rep: grid[dayIndex][doctorId] = LEAVE
+    Rep-->>BE: repaired RosterGrid
+    BE->>DB: $transaction: upsert all shifts\n(key: rosterId + userId + date)
+    BE->>DB: update leave status → APPROVED
+    BE-->>Admin: { leave }
+```
 
-### Frontend
-
-**Routing — `router.tsx`**
-
-React Router v7 with two protected sub-trees:
+**Replacement selection priority (NIGHT case):**
 
 ```
-/login              → LoginPage
-/admin/*            → RequireRole(ADMIN) → AdminLayout
-  /admin            → Dashboard
-  /admin/roster     → RosterPage
-  /admin/staff      → StaffPage
-  /admin/leave      → LeavePage
-/user/*             → RequireRole(DOCTOR) → UserLayout
-  /user             → MyRosterPage
-  /user/team        → TeamRosterPage
-  /user/leave       → LeaveRequestPage
+candidates = same-grade doctors where:
+  - today's shift is MORNING (preferred) or WO (fallback)
+  - yesterday was NOT NIGHT (no consecutive nights)
+
+sorted by: nightCount ascending (most rested first)
 ```
 
-`RequireRole` reads from Zustand; unauthenticated users are redirected to `/login`, wrong-role users are redirected to their own portal root.
+---
+
+### 11. Frontend State Management
+
+#### Zustand Stores
+
+| Store | File | Persisted to | State | Actions |
+|---|---|---|---|---|
+| Auth | `store/auth.ts` | `sessionStorage` (key: `auth-store`) | `user`, `accessToken`, `refreshToken` | `login(email, pw)`, `logout()` |
+| Theme | `store/theme.ts` | `localStorage` (key: `theme-store`) | `isDark` | `toggle()` |
+
+`logout()` calls `sessionStorage.clear()` — no backend call needed since tokens are stateless JWTs.
+
+#### TanStack Query Key Registry
+
+| Query Key | Data | Used in |
+|---|---|---|
+| `['rosters']` | All rosters (summary, no shifts) | Dashboard, invalidated after generate/publish |
+| `['roster', month, year]` | Single roster with full shifts | RosterPage, MyRosterPage, TeamRosterPage |
+| `['users']` | All doctors | StaffPage, Dashboard |
+| `['leaves']` | All leaves (admin) | LeavePage, Dashboard |
+| `['my-leaves']` | Own leaves (doctor) | LeaveRequestPage |
+
+All queries use `retry: false` for 404 cases (unpublished roster). Mutations call `qc.invalidateQueries()` on success to keep cache consistent.
 
 ---
 
-**API client — `lib/api.ts`**
+### 12. API Client (`lib/api.ts`)
 
-Axios instance with `baseURL: '/api'` (Vite proxies `/api` → `http://localhost:4000` in dev).
+```
+Outgoing request:
+  1. Read sessionStorage['auth-store']
+  2. Extract state.accessToken
+  3. Attach Authorization: Bearer <token>
 
-- **Request interceptor** — reads `accessToken` from `sessionStorage` (`auth-store` key) and attaches `Authorization: Bearer <token>`
-- **Response interceptor** — on a 401, attempts one silent refresh via `POST /api/auth/refresh` using the stored `refreshToken`, updates `sessionStorage`, and retries the original request. On failure, clears `sessionStorage` and redirects to `/login`
+Incoming 401 response:
+  1. Check _retry flag (prevent infinite loop)
+  2. Read state.refreshToken from sessionStorage
+  3. POST /api/auth/refresh { refreshToken }
+  4a. Success → update accessToken in sessionStorage → retry original request
+  4b. Failure → sessionStorage.clear() → redirect to /login
+```
+
+Vite proxies all `/api` requests to `http://localhost:4000` in development, so the Axios `baseURL: '/api'` works identically in dev and production.
 
 ---
 
-**State management**
+### 13. Key Components
 
-| Store | Library | Persistence | Contents |
-|---|---|---|---|
-| `auth.ts` | Zustand + `persist` | `sessionStorage` | `user`, `accessToken`, `refreshToken`, `login()`, `logout()` |
-| `theme.ts` | Zustand | `localStorage` | `dark` boolean, `toggle()` |
+#### `RosterGrid`
 
-Server state (rosters, leaves, users) is managed entirely by **TanStack Query** with query keys like `['roster', month, year]` and `['leaves']`. Mutations invalidate relevant query keys on success.
+| Prop | Type | Description |
+|---|---|---|
+| `roster` | `Roster` | Full roster object with shifts |
+| `onShiftClick?` | `(info: ShiftClickInfo) => void` | Called on cell click (admin edit modal) |
+| `filterGrade?` | `Grade \| null` | Hide doctors not matching grade |
+| `filterShift?` | `ShiftType \| null` | Dim cells not matching shift type |
+| `filterName?` | `string` | Filter doctors by name substring |
 
----
+Doctors are sorted seniors-first, then alphabetically within grade. Shift lookup is memoized into a `Record<userId, Record<dateKey, {id, type}>>` map. The leftmost doctor name column is CSS `sticky` to stay visible during horizontal scroll.
 
-**Key components**
+#### `MonthPicker`
 
-| Component | Description |
+| Prop | Type | Description |
+|---|---|---|
+| `variant` | `'admin-roster' \| 'team-roster' \| 'my-roster'` | Controls which action buttons appear |
+| `selectedMonth` | `number` | 1–12 |
+| `selectedYear` | `number` | Min 2026 (◀ disabled at floor) |
+| `onMonthChange` | `(m: number) => void` | |
+| `onYearChange` | `(y: number) => void` | |
+| `onPublish?` | `() => void` | admin-roster only |
+| `onCopyPrev?` | `() => void` | admin-roster only |
+| `onClear?` | `() => void` | admin-roster only |
+| `hasRoster?` | `boolean` | Controls visibility of Clear + Publish buttons |
+| `rosterStatus?` | `RosterStatus` | Switches Publish ↔ Unpublish label |
+
+#### `ShiftBadge`
+
+Maps `ShiftType` to a coloured inline pill:
+
+| ShiftType | Colour |
 |---|---|
-| `RosterGrid` | Horizontally scrollable table; sticky doctor name column; click a shift cell to open the edit modal (admin only). Supports `filterGrade`, `filterShift`, `filterName` props. |
-| `MonthPicker` | Horizontal pill row (Jan–Dec) with `◀ year ▶` stepper (min 2026). Selected pill gets indigo fill + checkmark. Admin variant (`admin-roster`) renders Publish/Unpublish, Copy Prev, and Clear action buttons inline. |
-| `ShiftBadge` | Maps `ShiftType` → coloured rounded pill (sky=MORNING, indigo=NIGHT, slate=OFF, emerald=WO, rose=LEAVE) |
-| `Button` | Variants: `primary` (indigo), `secondary` (bordered), `danger` (red), `ghost`. Sizes: `sm`, `md`, `lg`. Accepts `loading` prop to show spinner. |
+| MORNING | Sky blue |
+| NIGHT | Indigo |
+| OFF | Slate |
+| WO | Emerald |
+| LEAVE | Rose |
+
+#### `Button`
+
+| Prop | Values | Default |
+|---|---|---|
+| `variant` | `primary` · `secondary` · `danger` · `ghost` | `primary` |
+| `size` | `sm` · `md` · `lg` | `md` |
+| `loading` | `boolean` | `false` — shows `Loader2` spinner, disables button |
 
 ---
 
