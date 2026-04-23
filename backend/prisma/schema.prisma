@@ -36,17 +36,24 @@ enum LeaveStatus {
   REJECTED
 }
 
+enum UserStatus {
+  PENDING
+  ACTIVE
+}
+
 model User {
-  id        String   @id @default(uuid())
+  id        String     @id @default(uuid())
   name      String
-  email     String   @unique
-  password  String
+  email     String     @unique
+  password  String?
+  googleId  String?    @unique
   role      Role
   grade     Grade?
+  status    UserStatus @default(ACTIVE)
   shifts    Shift[]
   leaves    Leave[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 }
 
 model Roster {

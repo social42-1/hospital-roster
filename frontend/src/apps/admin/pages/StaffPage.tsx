@@ -9,12 +9,14 @@ import { Modal } from '@/components/ui/Modal';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/Toast';
-import { UserPlus, Trash2 } from 'lucide-react';
+import { UserPlus, Trash2, CheckCircle, XCircle } from 'lucide-react';
 
 export default function StaffPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', password: '', grade: 'JUNIOR' });
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [approveTarget, setApproveTarget] = useState<User | null>(null);
+  const [approveGrade, setApproveGrade] = useState('JUNIOR');
   const qc = useQueryClient();
   const toast = useToast((s) => s.show);
 
@@ -34,18 +36,36 @@ export default function StaffPage() {
     onError: () => toast('Failed to add doctor', 'error'),
   });
 
+  const approveMutation = useMutation({
+    mutationFn: ({ id, grade }: { id: string; grade: string }) =>
+      api.put(`/users/${id}/approve`, { grade }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['users'] });
+      setApproveTarget(null);
+      toast('Doctor approved — they can now log in', 'success');
+    },
+    onError: () => toast('Failed to approve doctor', 'error'),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/users/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['users'] });
       setDeleteId(null);
+      setApproveTarget(null);
       toast('Doctor removed', 'success');
     },
     onError: () => toast('Failed to remove doctor', 'error'),
   });
 
-  const juniors = doctors?.filter(d => d.grade === 'JUNIOR') ?? [];
-  const seniors = doctors?.filter(d => d.grade === 'SENIOR') ?? [];
+  const pending = doctors?.filter(d => d.status === 'PENDING') ?? [];
+  const juniors = doctors?.filter(d => d.grade === 'JUNIOR' && d.status === 'ACTIVE') ?? [];
+  const seniors = doctors?.filter(d => d.grade === 'SENIOR' && d.status === 'ACTIVE') ?? [];
+
+  const openApprove = (doc: User) => {
+    setApproveTarget(doc);
+    setApproveGrade(doc.grade ?? 'JUNIOR');
+  };
 
   return (
     <div className="p-6 max-w-4xl">
@@ -64,7 +84,58 @@ export default function StaffPage() {
         <div className="flex justify-center py-12"><Spinner className="w-6 h-6" /></div>
       ) : (
         <div className="space-y-6">
-          {[{ label: 'Senior Doctors', list: seniors, grade: 'SENIOR' }, { label: 'Junior Doctors', list: juniors, grade: 'JUNIOR' }].map(({ label, list }) => (
+          {/* Pending approvals */}
+          {pending.length > 0 && (
+            <Card>
+              <CardHeader>
+                <h2 className="font-semibold text-slate-900 dark:text-gray-100 flex items-center gap-2">
+                  Pending Approval
+                  <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400">
+                    {pending.length}
+                  </span>
+                </h2>
+              </CardHeader>
+              <CardContent className="p-0">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100 dark:border-gray-700 bg-slate-50/50 dark:bg-gray-800/50">
+                      {['Name', 'Email', 'Requested Grade', ''].map(h => (
+                        <th key={h} className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase tracking-wide">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pending.map(doc => (
+                      <tr key={doc.id} className="border-b border-slate-700/30 hover:bg-slate-50/50 dark:hover:bg-gray-700/30">
+                        <td className="px-6 py-3 font-medium text-slate-900 dark:text-gray-100">{doc.name}</td>
+                        <td className="px-6 py-3 text-slate-500 dark:text-gray-400">{doc.email}</td>
+                        <td className="px-6 py-3">
+                          {doc.grade
+                            ? <Badge variant={doc.grade === 'SENIOR' ? 'info' : 'warning'}>{doc.grade}</Badge>
+                            : <span className="text-slate-400 text-xs">Not set</span>}
+                        </td>
+                        <td className="px-6 py-3">
+                          <div className="flex gap-2 justify-end">
+                            <Button size="sm" onClick={() => openApprove(doc)}>
+                              <CheckCircle className="w-3.5 h-3.5" />
+                              Approve
+                            </Button>
+                            <Button size="sm" variant="danger" onClick={() => setDeleteId(doc.id)}>
+                              <XCircle className="w-3.5 h-3.5" />
+                              Reject
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Active doctors by grade */}
+          {[{ label: 'Senior Doctors', list: seniors }, { label: 'Junior Doctors', list: juniors }].map(({ label, list }) => (
             <Card key={label}>
               <CardHeader>
                 <h2 className="font-semibold text-slate-900 dark:text-gray-100">{label} <span className="text-slate-400 font-normal text-sm">({list.length})</span></h2>
@@ -126,12 +197,44 @@ export default function StaffPage() {
         </div>
       </Modal>
 
-      {/* Delete Confirm Modal */}
-      <Modal open={!!deleteId} onClose={() => setDeleteId(null)} title="Remove Doctor">
-        <p className="text-slate-600 dark:text-gray-400 text-sm mb-4">Are you sure you want to remove this doctor? This action cannot be undone.</p>
+      {/* Approve Modal */}
+      {approveTarget && (
+        <Modal open={!!approveTarget} onClose={() => setApproveTarget(null)} title="Approve Doctor">
+          <p className="text-sm text-slate-500 dark:text-gray-400 mb-4">
+            Approving <span className="font-medium text-slate-700 dark:text-gray-200">{approveTarget.name}</span> ({approveTarget.email})
+          </p>
+          <div className="flex flex-col gap-1 mb-5">
+            <label className="text-sm font-medium text-slate-700 dark:text-gray-100">Grade</label>
+            <select
+              value={approveGrade}
+              onChange={e => setApproveGrade(e.target.value)}
+              className="px-3 py-2 rounded-lg border border-slate-200 dark:border-gray-600 text-sm bg-white dark:bg-gray-700 dark:text-gray-100"
+            >
+              <option value="JUNIOR">Junior</option>
+              <option value="SENIOR">Senior</option>
+            </select>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setApproveTarget(null)}>Cancel</Button>
+            <Button onClick={() => approveMutation.mutate({ id: approveTarget.id, grade: approveGrade })} loading={approveMutation.isPending}>
+              Approve
+            </Button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete/Reject Confirm Modal */}
+      <Modal open={!!deleteId} onClose={() => setDeleteId(null)} title={pending.find(d => d.id === deleteId) ? 'Reject Registration' : 'Remove Doctor'}>
+        <p className="text-slate-600 dark:text-gray-400 text-sm mb-4">
+          {pending.find(d => d.id === deleteId)
+            ? 'Are you sure you want to reject this registration request? The account will be deleted.'
+            : 'Are you sure you want to remove this doctor? This action cannot be undone.'}
+        </p>
         <div className="flex justify-end gap-3">
           <Button variant="secondary" onClick={() => setDeleteId(null)}>Cancel</Button>
-          <Button variant="danger" onClick={() => deleteMutation.mutate(deleteId!)} loading={deleteMutation.isPending}>Remove</Button>
+          <Button variant="danger" onClick={() => deleteMutation.mutate(deleteId!)} loading={deleteMutation.isPending}>
+            {pending.find(d => d.id === deleteId) ? 'Reject' : 'Remove'}
+          </Button>
         </div>
       </Modal>
     </div>

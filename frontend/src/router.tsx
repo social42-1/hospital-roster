@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth';
 import LoginPage from '@/pages/LoginPage';
+import SignupPage from '@/pages/SignupPage';
 import AdminLayout from '@/apps/admin/AdminLayout';
 import Dashboard from '@/apps/admin/pages/Dashboard';
 import RosterPage from '@/apps/admin/pages/RosterPage';
@@ -21,6 +22,7 @@ function RequireRole({ role, children }: { role: 'ADMIN' | 'DOCTOR'; children: R
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/login" replace /> },
   { path: '/login', element: <LoginPage /> },
+  { path: '/signup', element: <SignupPage /> },
   {
     path: '/admin',
     element: <RequireRole role="ADMIN"><AdminLayout /></RequireRole>,

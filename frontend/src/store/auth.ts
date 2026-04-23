@@ -8,6 +8,7 @@ interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: (credential: string) => Promise<{ pending?: boolean }>;
   logout: () => void;
 }
 
@@ -20,6 +21,12 @@ export const useAuthStore = create<AuthState>()(
       login: async (email, password) => {
         const { data } = await api.post('/auth/login', { email, password });
         set({ user: data.user, accessToken: data.accessToken, refreshToken: data.refreshToken });
+      },
+      loginWithGoogle: async (credential) => {
+        const { data } = await api.post('/auth/google', { credential });
+        if (data.pending) return { pending: true };
+        set({ user: data.user, accessToken: data.accessToken, refreshToken: data.refreshToken });
+        return {};
       },
       logout: () => {
         sessionStorage.clear();

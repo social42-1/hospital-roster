@@ -3,6 +3,7 @@ export type Grade = 'JUNIOR' | 'SENIOR';
 export type ShiftType = 'MORNING' | 'NIGHT' | 'OFF' | 'WO' | 'LEAVE';
 export type RosterStatus = 'DRAFT' | 'PUBLISHED';
 export type LeaveStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type UserStatus = 'PENDING' | 'ACTIVE';
 
 export interface User {
   id: string;
@@ -10,6 +11,7 @@ export interface User {
   email: string;
   role: Role;
   grade: Grade | null;
+  status: UserStatus;
 }
 
 export interface ShiftUser {
