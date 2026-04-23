@@ -25,7 +25,7 @@ export default function Dashboard() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Dashboard</h1>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-gray-100">Dashboard</h1>
         <p className="text-slate-500 text-sm mt-1">{now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
       </div>
 
@@ -37,7 +37,7 @@ export default function Dashboard() {
                 <Icon className="w-6 h-6" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{value}</p>
+                <p className="text-2xl font-bold text-slate-900 dark:text-gray-100">{value}</p>
                 <p className="text-sm text-slate-500">{label}</p>
               </div>
             </CardContent>
@@ -47,7 +47,7 @@ export default function Dashboard() {
 
       <Card>
         <CardContent>
-          <h2 className="font-semibold text-slate-900 dark:text-slate-100 mb-3">Quick Access — Rosters</h2>
+          <h2 className="font-semibold text-slate-900 dark:text-gray-100 mb-3">Quick Access — Rosters</h2>
           {!rosters ? <Spinner className="w-5 h-5" /> : rosters.length === 0 ? (
             <p className="text-slate-400 text-sm">No rosters generated yet.</p>
           ) : (
@@ -56,7 +56,7 @@ export default function Dashboard() {
                 <button
                   key={r.id}
                   onClick={() => navigate(`/admin/roster?month=${r.month}&year=${r.year}`)}
-                  className="flex items-center justify-between w-full px-4 py-3 rounded-lg border border-slate-100 dark:border-slate-700 hover:border-indigo-200 dark:hover:border-indigo-700 hover:bg-indigo-50/30 dark:hover:bg-indigo-900/20 transition-colors text-sm"
+                  className="flex items-center justify-between w-full px-4 py-3 rounded-lg border border-slate-100 dark:border-gray-700 hover:border-indigo-200 dark:hover:border-indigo-700 hover:bg-indigo-50/30 dark:hover:bg-indigo-900/20 transition-colors text-sm"
                 >
                   <span className="font-medium text-slate-700 dark:text-slate-300">
                     {new Date(r.year, r.month - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}

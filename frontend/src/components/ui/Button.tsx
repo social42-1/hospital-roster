@@ -12,9 +12,9 @@ export function Button({ variant = 'primary', size = 'md', loading, children, cl
   const base = 'inline-flex items-center gap-2 font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
   const variants = {
     primary: 'bg-indigo-600 text-white hover:bg-indigo-700',
-    secondary: 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700',
+    secondary: 'bg-white dark:bg-gray-800 text-slate-700 dark:text-gray-100 border border-slate-200 dark:border-gray-600 hover:bg-slate-50 dark:hover:bg-gray-700',
     danger: 'bg-red-600 text-white hover:bg-red-700',
-    ghost: 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700',
+    ghost: 'text-slate-600 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-gray-700',
   };
   const sizes = { sm: 'px-3 py-1.5 text-sm', md: 'px-4 py-2 text-sm', lg: 'px-5 py-2.5 text-base' };
   return (

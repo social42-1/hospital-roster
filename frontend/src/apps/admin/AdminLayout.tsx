@@ -19,9 +19,9 @@ export default function AdminLayout() {
   const handleLogout = () => { logout(); navigate('/login'); };
 
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-slate-950">
+    <div className="flex h-screen bg-slate-50 dark:bg-gray-900">
       {/* Sidebar */}
-      <aside className="w-64 bg-slate-900 flex flex-col shrink-0">
+      <aside className="w-64 bg-gray-900 flex flex-col shrink-0">
         <div className="px-6 py-5 border-b border-slate-700/50">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-indigo-500 rounded-xl flex items-center justify-center shrink-0">

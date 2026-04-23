@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import api from '@/lib/api';
 import { Roster, Violation, ShiftType, Grade } from '@/types';
 import { RosterGrid, ShiftClickInfo } from '@/components/RosterGrid';
+import { MonthPicker } from '@/components/MonthPicker';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { Modal } from '@/components/ui/Modal';
@@ -20,6 +21,7 @@ export default function RosterPage() {
   const [editTarget, setEditTarget] = useState<ShiftClickInfo | null>(null);
   const [filterShift, setFilterShift] = useState<ShiftType | null>(null);
   const [filterGrade, setFilterGrade] = useState<Grade | null>(null);
+  const [search, setSearch] = useState('');
   const qc = useQueryClient();
   const toast = useToast((s) => s.show);
 
@@ -73,38 +75,35 @@ export default function RosterPage() {
 
   const monthName = new Date(year, month - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
-  const months = Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: new Date(year, i).toLocaleDateString('en-US', { month: 'long' }) }));
-  const years = [now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1];
+  const publishAction = roster?.status === 'DRAFT'
+    ? publishMutation
+    : roster?.status === 'PUBLISHED'
+    ? unpublishMutation
+    : null;
 
   return (
     <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Roster</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-gray-100">Roster</h1>
           <p className="text-slate-500 text-sm mt-1">Generate and manage monthly schedules</p>
         </div>
-        <div className="flex items-center gap-3">
-          <select value={month} onChange={(e) => setMonth(+e.target.value)} className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 text-sm bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200">
-            {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-          </select>
-          <select value={year} onChange={(e) => setYear(+e.target.value)} className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 text-sm bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200">
-            {years.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-          <Button onClick={() => generateMutation.mutate()} loading={generateMutation.isPending} variant="secondary">
-            Generate Roster
-          </Button>
-          {roster?.status === 'DRAFT' && (
-            <Button onClick={() => publishMutation.mutate()} loading={publishMutation.isPending}>
-              Publish
-            </Button>
-          )}
-          {roster?.status === 'PUBLISHED' && (
-            <Button variant="secondary" onClick={() => unpublishMutation.mutate()} loading={unpublishMutation.isPending}>
-              Unpublish
-            </Button>
-          )}
-        </div>
+        <Button onClick={() => generateMutation.mutate()} loading={generateMutation.isPending} variant="secondary">
+          Generate Roster
+        </Button>
       </div>
+
+      <MonthPicker
+        variant="admin-roster"
+        selectedMonth={month}
+        selectedYear={year}
+        onMonthChange={setMonth}
+        onYearChange={setYear}
+        hasRoster={!!roster}
+        onPublish={publishAction ? () => publishAction.mutate() : undefined}
+        publishLoading={publishMutation.isPending || unpublishMutation.isPending}
+        rosterStatus={roster?.status}
+      />
 
       {violations.length > 0 && (
         <div className="mb-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
@@ -129,13 +128,25 @@ export default function RosterPage() {
       )}
 
       {roster && (
+        <div className="mb-4">
+          <input
+            type="text"
+            placeholder="Search doctor..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="px-3 py-2 rounded-lg border border-slate-200 dark:border-gray-600 text-sm bg-white dark:bg-gray-700 text-slate-900 dark:text-gray-100 placeholder:text-slate-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-56"
+          />
+        </div>
+      )}
+
+      {roster && (
         <div className="flex flex-wrap items-center gap-2 mb-4">
           <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">Shift</span>
           {([null, 'MORNING', 'NIGHT', 'OFF', 'WO', 'LEAVE'] as (ShiftType | null)[]).map((s) => (
             <button
               key={s ?? 'ALL'}
               onClick={() => setFilterShift(s === filterShift ? null : s)}
-              className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${filterShift === s ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+              className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${filterShift === s ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-gray-800 text-slate-600 dark:text-gray-100 border-slate-200 dark:border-gray-600 hover:bg-slate-50 dark:hover:bg-gray-700'}`}
             >
               {s ?? 'All'}
             </button>
@@ -145,7 +156,7 @@ export default function RosterPage() {
             <button
               key={g ?? 'ALL'}
               onClick={() => setFilterGrade(g === filterGrade ? null : g)}
-              className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${filterGrade === g ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+              className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${filterGrade === g ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-gray-800 text-slate-600 dark:text-gray-100 border-slate-200 dark:border-gray-600 hover:bg-slate-50 dark:hover:bg-gray-700'}`}
             >
               {g ?? 'All'}
             </button>
@@ -158,7 +169,7 @@ export default function RosterPage() {
           <Spinner className="w-8 h-8" />
         </div>
       ) : roster ? (
-        <RosterGrid roster={roster} onShiftClick={setEditTarget} filterShift={filterShift} filterGrade={filterGrade} />
+        <RosterGrid roster={roster} onShiftClick={setEditTarget} filterShift={filterShift} filterGrade={filterGrade} filterName={search} />
       ) : (
         <div className="flex flex-col items-center justify-center h-64 text-center">
           <p className="text-slate-400 text-lg font-medium">No roster for {monthName}</p>

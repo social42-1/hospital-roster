@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { Roster, ShiftType, Grade } from '@/types';
 import { RosterGrid } from '@/components/RosterGrid';
+import { MonthPicker } from '@/components/MonthPicker';
 import { Spinner } from '@/components/ui/Spinner';
 
 export default function TeamRosterPage() {
@@ -11,6 +12,7 @@ export default function TeamRosterPage() {
   const [year, setYear] = useState(now.getFullYear());
   const [filterShift, setFilterShift] = useState<ShiftType | null>(null);
   const [filterGrade, setFilterGrade] = useState<Grade | null>(null);
+  const [search, setSearch] = useState('');
 
   const { data: roster, isLoading } = useQuery<Roster>({
     queryKey: ['roster', month, year],
@@ -18,23 +20,29 @@ export default function TeamRosterPage() {
     retry: false,
   });
 
-  const months = Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: new Date(year, i).toLocaleDateString('en-US', { month: 'long' }) }));
-
   return (
     <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Team Roster</h1>
-          <p className="text-slate-500 text-sm mt-1">Full team schedule</p>
-        </div>
-        <div className="flex gap-2">
-          <select value={month} onChange={e => setMonth(+e.target.value)} className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 text-sm bg-white dark:bg-slate-800 dark:text-slate-200">
-            {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-          </select>
-          <select value={year} onChange={e => setYear(+e.target.value)} className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 text-sm bg-white dark:bg-slate-800 dark:text-slate-200">
-            {[year - 1, year, year + 1].map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-        </div>
+      <div className="mb-4">
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-gray-100">Team Roster</h1>
+        <p className="text-slate-500 text-sm mt-1">Full team schedule</p>
+      </div>
+
+      <MonthPicker
+        variant="team-roster"
+        selectedMonth={month}
+        selectedYear={year}
+        onMonthChange={setMonth}
+        onYearChange={setYear}
+      />
+
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder="Search doctor..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="px-3 py-2 rounded-lg border border-slate-200 dark:border-gray-600 text-sm bg-white dark:bg-gray-700 text-slate-900 dark:text-gray-100 placeholder:text-slate-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-56"
+        />
       </div>
 
       {/* Legend */}
@@ -42,7 +50,7 @@ export default function TeamRosterPage() {
         {[['M', 'bg-sky-100 text-sky-700 border-sky-200', 'Morning'], ['N', 'bg-indigo-100 text-indigo-700 border-indigo-200', 'Night'], ['O', 'bg-slate-100 text-slate-500 border-slate-200', 'Off'], ['WO', 'bg-emerald-100 text-emerald-700 border-emerald-200', 'Weekly Off'], ['L', 'bg-rose-100 text-rose-700 border-rose-200', 'Leave']].map(([abbr, cls, label]) => (
           <div key={abbr} className="flex items-center gap-1.5">
             <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-semibold border ${cls}`}>{abbr}</span>
-            <span className="text-slate-500 dark:text-slate-400">{label}</span>
+            <span className="text-slate-500 dark:text-gray-400">{label}</span>
           </div>
         ))}
       </div>
@@ -54,7 +62,7 @@ export default function TeamRosterPage() {
             <button
               key={s ?? 'ALL'}
               onClick={() => setFilterShift(s === filterShift ? null : s)}
-              className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${filterShift === s ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+              className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${filterShift === s ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-gray-800 text-slate-600 dark:text-gray-100 border-slate-200 dark:border-gray-600 hover:bg-slate-50 dark:hover:bg-gray-700'}`}
             >
               {s ?? 'All'}
             </button>
@@ -64,7 +72,7 @@ export default function TeamRosterPage() {
             <button
               key={g ?? 'ALL'}
               onClick={() => setFilterGrade(g === filterGrade ? null : g)}
-              className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${filterGrade === g ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+              className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${filterGrade === g ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-gray-800 text-slate-600 dark:text-gray-100 border-slate-200 dark:border-gray-600 hover:bg-slate-50 dark:hover:bg-gray-700'}`}
             >
               {g ?? 'All'}
             </button>
@@ -75,7 +83,7 @@ export default function TeamRosterPage() {
       {isLoading ? (
         <div className="flex justify-center py-12"><Spinner className="w-6 h-6" /></div>
       ) : roster ? (
-        <RosterGrid roster={roster} filterShift={filterShift} filterGrade={filterGrade} />
+        <RosterGrid roster={roster} filterShift={filterShift} filterGrade={filterGrade} filterName={search} />
       ) : (
         <div className="flex flex-col items-center justify-center h-64 text-center">
           <p className="text-slate-400 text-lg font-medium">No published roster for this month</p>

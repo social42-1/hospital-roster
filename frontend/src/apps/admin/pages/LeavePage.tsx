@@ -41,7 +41,7 @@ export default function LeavePage() {
   return (
     <div className="p-6 max-w-4xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Leave Requests</h1>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-gray-100">Leave Requests</h1>
         <p className="text-slate-500 text-sm mt-1">Approve or reject leave requests — roster updates automatically</p>
       </div>
 
@@ -50,7 +50,7 @@ export default function LeavePage() {
           <button
             key={f}
             onClick={() => setFilter(f)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filter === f ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filter === f ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-gray-800 text-slate-600 dark:text-gray-100 border border-slate-200 dark:border-gray-600 hover:bg-slate-50 dark:hover:bg-gray-700'}`}
           >
             {f} <span className="ml-1 opacity-70">{counts[f]}</span>
           </button>
@@ -66,18 +66,18 @@ export default function LeavePage() {
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
+                <tr className="border-b border-slate-100 dark:border-gray-700 bg-slate-50/50 dark:bg-gray-800/50">
                   {['Doctor', 'Grade', 'Date', 'Reason', 'Status', 'Actions'].map(h => (
-                    <th key={h} className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">{h}</th>
+                    <th key={h} className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {filtered.map(leave => (
-                  <tr key={leave.id} className="border-b border-slate-700/30 hover:bg-slate-50/50 dark:hover:bg-slate-700/30">
-                    <td className="px-6 py-3 font-medium text-slate-900 dark:text-slate-100">{leave.user?.name}</td>
+                  <tr key={leave.id} className="border-b border-slate-700/30 hover:bg-slate-50/50 dark:hover:bg-gray-700/30">
+                    <td className="px-6 py-3 font-medium text-slate-900 dark:text-gray-100">{leave.user?.name}</td>
                     <td className="px-6 py-3"><Badge variant={leave.user?.grade === 'SENIOR' ? 'info' : 'warning'}>{leave.user?.grade ?? '—'}</Badge></td>
-                    <td className="px-6 py-3 text-slate-600 dark:text-slate-400">{format(parseISO(leave.date), 'dd MMM yyyy')}</td>
+                    <td className="px-6 py-3 text-slate-600 dark:text-gray-400">{format(parseISO(leave.date), 'dd MMM yyyy')}</td>
                     <td className="px-6 py-3 text-slate-600 max-w-xs truncate">{leave.reason}</td>
                     <td className="px-6 py-3"><Badge variant={statusVariant(leave.status)}>{leave.status}</Badge></td>
                     <td className="px-6 py-3">

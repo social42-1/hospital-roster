@@ -51,7 +51,7 @@ export default function StaffPage() {
     <div className="p-6 max-w-4xl">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Staff</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-gray-100">Staff</h1>
           <p className="text-slate-500 text-sm mt-1">Manage doctors and their grades</p>
         </div>
         <Button onClick={() => setOpen(true)}>
@@ -67,7 +67,7 @@ export default function StaffPage() {
           {[{ label: 'Senior Doctors', list: seniors, grade: 'SENIOR' }, { label: 'Junior Doctors', list: juniors, grade: 'JUNIOR' }].map(({ label, list }) => (
             <Card key={label}>
               <CardHeader>
-                <h2 className="font-semibold text-slate-900 dark:text-slate-100">{label} <span className="text-slate-400 font-normal text-sm">({list.length})</span></h2>
+                <h2 className="font-semibold text-slate-900 dark:text-gray-100">{label} <span className="text-slate-400 font-normal text-sm">({list.length})</span></h2>
               </CardHeader>
               <CardContent className="p-0">
                 {list.length === 0 ? (
@@ -75,18 +75,18 @@ export default function StaffPage() {
                 ) : (
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Name</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Email</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Grade</th>
+                      <tr className="border-b border-slate-100 dark:border-gray-700 bg-slate-50/50 dark:bg-gray-800/50">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase tracking-wide">Name</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase tracking-wide">Email</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase tracking-wide">Grade</th>
                         <th className="px-6 py-3"></th>
                       </tr>
                     </thead>
                     <tbody>
                       {list.map((doc) => (
-                        <tr key={doc.id} className="border-b border-slate-700/30 hover:bg-slate-50/50 dark:hover:bg-slate-700/30">
-                          <td className="px-6 py-3 font-medium text-slate-900 dark:text-slate-100">{doc.name}</td>
-                          <td className="px-6 py-3 text-slate-500 dark:text-slate-400">{doc.email}</td>
+                        <tr key={doc.id} className="border-b border-slate-700/30 hover:bg-slate-50/50 dark:hover:bg-gray-700/30">
+                          <td className="px-6 py-3 font-medium text-slate-900 dark:text-gray-100">{doc.name}</td>
+                          <td className="px-6 py-3 text-slate-500 dark:text-gray-400">{doc.email}</td>
                           <td className="px-6 py-3">
                             <Badge variant={doc.grade === 'SENIOR' ? 'info' : 'warning'}>{doc.grade}</Badge>
                           </td>
@@ -113,8 +113,8 @@ export default function StaffPage() {
           <Input label="Email" type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder="jane@hospital.com" />
           <Input label="Password" type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} placeholder="Temporary password" />
           <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Grade</label>
-            <select value={form.grade} onChange={e => setForm({...form, grade: e.target.value})} className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 text-sm bg-white dark:bg-slate-800 dark:text-slate-200">
+            <label className="text-sm font-medium text-slate-700 dark:text-gray-100">Grade</label>
+            <select value={form.grade} onChange={e => setForm({...form, grade: e.target.value})} className="px-3 py-2 rounded-lg border border-slate-200 dark:border-gray-600 text-sm bg-white dark:bg-gray-700 dark:text-gray-100">
               <option value="JUNIOR">Junior</option>
               <option value="SENIOR">Senior</option>
             </select>
@@ -128,7 +128,7 @@ export default function StaffPage() {
 
       {/* Delete Confirm Modal */}
       <Modal open={!!deleteId} onClose={() => setDeleteId(null)} title="Remove Doctor">
-        <p className="text-slate-600 dark:text-slate-400 text-sm mb-4">Are you sure you want to remove this doctor? This action cannot be undone.</p>
+        <p className="text-slate-600 dark:text-gray-400 text-sm mb-4">Are you sure you want to remove this doctor? This action cannot be undone.</p>
         <div className="flex justify-end gap-3">
           <Button variant="secondary" onClick={() => setDeleteId(null)}>Cancel</Button>
           <Button variant="danger" onClick={() => deleteMutation.mutate(deleteId!)} loading={deleteMutation.isPending}>Remove</Button>

@@ -16,9 +16,10 @@ interface RosterGridProps {
   onShiftClick?: (info: ShiftClickInfo) => void;
   filterGrade?: Grade | null;
   filterShift?: ShiftType | null;
+  filterName?: string;
 }
 
-export function RosterGrid({ roster, onShiftClick, filterGrade, filterShift }: RosterGridProps) {
+export function RosterGrid({ roster, onShiftClick, filterGrade, filterShift, filterName }: RosterGridProps) {
   // Get sorted unique doctors from shifts
   const doctors = useMemo(() => {
     const map = new Map<string, { id: string; name: string; grade: Grade }>();
@@ -27,11 +28,12 @@ export function RosterGrid({ roster, onShiftClick, filterGrade, filterShift }: R
     // Seniors first, then juniors, alphabetical within each group
     return arr
       .filter((d) => !filterGrade || d.grade === filterGrade)
+      .filter((d) => !filterName || d.name.toLowerCase().includes(filterName.toLowerCase()))
       .sort((a, b) => {
         if (a.grade !== b.grade) return a.grade === 'SENIOR' ? -1 : 1;
         return a.name.localeCompare(b.name);
       });
-  }, [roster.shifts, filterGrade]);
+  }, [roster.shifts, filterGrade, filterName]);
 
   // Build lookup: userId -> date string -> shift
   const shiftMap = useMemo(() => {
@@ -54,28 +56,28 @@ export function RosterGrid({ roster, onShiftClick, filterGrade, filterShift }: R
   }, [roster.month, roster.year]);
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+    <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-gray-700">
       <table className="min-w-max w-full text-sm border-collapse">
         <thead>
-          <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-            <th className="sticky left-0 z-10 bg-slate-50 dark:bg-slate-800 px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700 min-w-[160px]">
+          <tr className="bg-slate-50 dark:bg-gray-800 border-b border-slate-200 dark:border-gray-700">
+            <th className="sticky left-0 z-10 bg-slate-50 dark:bg-gray-800 px-4 py-3 text-left font-semibold text-slate-700 dark:text-gray-100 border-r border-slate-200 dark:border-gray-700 min-w-[160px]">
               Doctor
             </th>
             {days.map((d) => (
-              <th key={d.toISOString()} className="px-2 py-3 text-center font-medium text-slate-500 dark:text-slate-400 min-w-[44px]">
+              <th key={d.toISOString()} className="px-2 py-3 text-center font-medium text-slate-500 dark:text-gray-400 min-w-[44px]">
                 <div className="text-xs">{format(d, 'EEE')}</div>
-                <div className="text-sm font-semibold text-slate-700 dark:text-slate-300">{format(d, 'd')}</div>
+                <div className="text-sm font-semibold text-slate-700 dark:text-gray-100">{format(d, 'd')}</div>
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
           {doctors.map((doc, i) => (
-            <tr key={doc.id} className={i % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50/50 dark:bg-slate-800/50'}>
-              <td className="sticky left-0 z-10 bg-inherit px-4 py-2 border-r border-slate-200 dark:border-slate-700">
+            <tr key={doc.id} className={i % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-slate-50/50 dark:bg-gray-800/50'}>
+              <td className="sticky left-0 z-10 bg-inherit px-4 py-2 border-r border-slate-200 dark:border-gray-700">
                 <div className="flex items-center gap-2">
                   <div>
-                    <p className="font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap">{doc.name}</p>
+                    <p className="font-medium text-slate-900 dark:text-gray-100 whitespace-nowrap">{doc.name}</p>
                     <Badge variant={doc.grade === 'SENIOR' ? 'info' : 'warning'} className="mt-0.5">
                       {doc.grade}
                     </Badge>
@@ -97,7 +99,7 @@ export function RosterGrid({ roster, onShiftClick, filterGrade, filterShift }: R
                         <ShiftBadge type={shift.type} />
                       </button>
                     ) : (
-                      <span className={`text-slate-300 dark:text-slate-600 ${dimmed ? 'opacity-15' : ''}`}>—</span>
+                      <span className={`text-slate-300 dark:text-gray-600 ${dimmed ? 'opacity-15' : ''}`}>—</span>
                     )}
                   </td>
                 );
