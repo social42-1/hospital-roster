@@ -1,174 +1,85 @@
 # MediRoster
 
-A production-ready hospital roster management system. Automatically generates monthly shift schedules for medical staff, handles leave requests with automatic schedule repair, and provides separate portals for admins and doctors.
+Hospital shift roster management system. Auto-generates monthly schedules, handles leave with automatic repair, and provides separate portals for admins and doctors.
 
----
+## Stack
 
-## Tech Stack
+- **Frontend** — React 19, TypeScript, Vite, Tailwind CSS v4, TanStack Query, Zustand
+- **Backend** — Node.js, Express, TypeScript, Prisma 5, PostgreSQL
+- **Auth** — JWT access + refresh tokens
 
-| Layer | Technology |
-|---|---|
-| Frontend | React 19 + TypeScript + Vite 8 |
-| Styling | Tailwind CSS v4 + Radix UI |
-| State | TanStack Query + Zustand |
-| Backend | Node.js + Express + TypeScript |
-| ORM | Prisma 5 |
-| Database | PostgreSQL |
-| Auth | JWT (access + refresh tokens) |
+## Quick Start
 
----
-
-## Project Structure
-
-```
-hospital-roster/
-├── backend/
-│   ├── prisma/
-│   │   ├── schema.prisma        # DB models
-│   │   ├── seed.ts              # Seed admin + 9 doctors
-│   │   └── migrations/
-│   └── src/
-│       ├── routes/              # auth, users, roster, leave
-│       ├── services/
-│       │   ├── rosterEngine.ts  # Core scheduling algorithm
-│       │   ├── rosterValidator.ts
-│       │   └── rosterRepairer.ts
-│       └── middleware/          # JWT auth, error handling
-└── frontend/
-    └── src/
-        ├── apps/
-        │   ├── admin/           # Admin portal
-        │   └── user/            # Doctor portal
-        ├── components/          # RosterGrid, ShiftBadge, UI primitives
-        ├── lib/                 # Axios client
-        └── store/               # Zustand auth store
-```
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- PostgreSQL running locally
-
-### 1. Backend
+**Prerequisites:** Node.js 18+, PostgreSQL
 
 ```bash
-cd backend
+# Install all dependencies
 npm install
-```
 
-Create a `.env` file:
-
-```env
+# Backend env — create backend/.env
 DATABASE_URL="postgresql://postgres:password@localhost:5432/hospital_roster"
-JWT_SECRET="your-secret-key"
+JWT_SECRET="your-secret"
 JWT_REFRESH_SECRET="your-refresh-secret"
 PORT=4000
+
+# Run migrations + seed (1 admin, 9 doctors)
+npm run prisma:migrate --workspace=backend
+npm run prisma:seed --workspace=backend
+
+# Start dev servers
+npm run dev:backend   # http://localhost:4000
+npm run dev:frontend  # http://localhost:5173
 ```
-
-Run migrations and seed the database:
-
-```bash
-npx prisma migrate dev --name init
-npx ts-node prisma/seed.ts
-```
-
-Start the dev server:
-
-```bash
-npm run dev        # runs on http://localhost:4000
-```
-
-### 2. Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev        # runs on http://localhost:5173
-```
-
-The frontend proxies `/api` requests to `http://localhost:4000`.
-
----
 
 ## Seed Credentials
 
 | Role | Email | Password |
 |---|---|---|
 | Admin | admin@hospital.com | admin123 |
-| Doctor (Senior) | alice@hospital.com | doctor123 |
-| Doctor (Senior) | bob@hospital.com | doctor123 |
-| Doctor (Senior) | charlie@hospital.com | doctor123 |
-| Doctor (Senior) | diana@hospital.com | doctor123 |
-| Doctor (Junior) | ethan@hospital.com | doctor123 |
-| Doctor (Junior) | frank@hospital.com | doctor123 |
-| Doctor (Junior) | grace@hospital.com | doctor123 |
-| Doctor (Junior) | henry@hospital.com | doctor123 |
-| Doctor (Junior) | irene@hospital.com | doctor123 |
-
----
+| Doctor (any) | alice@hospital.com … irene@hospital.com | doctor123 |
 
 ## Features
 
-### Admin Portal (`/admin`)
-- **Dashboard** — monthly stats: night coverage, WO distribution, leave requests
-- **Roster** — generate a monthly schedule, preview constraint violations, publish to doctors, manually override any individual shift
-- **Staff** — add, view, and remove doctors; assign Senior/Junior grade
-- **Leave Management** — approve or reject pending leave requests; approval automatically repairs the roster
+**Admin Portal**
+- Generate monthly rosters with one click; preview constraint violations before publishing
+- Manually override any individual shift
+- Approve/reject leave requests — approval auto-repairs the affected roster day
+- Manage staff (add, remove, set Senior/Junior grade)
 
-### Doctor Portal (`/user`)
-- **My Roster** — personal shift calendar for the selected month
-- **Team Roster** — read-only view of the full team grid (published rosters only)
-- **Leave Request** — submit a leave for a specific date with a reason; track approval status
+**Doctor Portal**
+- Personal shift calendar view for any month
+- Full team grid (published rosters only)
+- Submit leave requests and track their status
 
----
+## Roster Algorithm
 
-## Roster Generation Algorithm
+Runs in five phases per month:
+1. Assign NIGHT — 1 Junior + 1 Senior per day, no consecutive nights, max ~5–6 per doctor
+2. Force OFF the day after every NIGHT shift
+3. Distribute 6–7 WOs per doctor on remaining free days
+4. Fill remaining days with MORNING
+5. Repair — convert a WO to MORNING on any day short of minimum coverage
 
-Schedules are generated in five phases for each month:
+Leave approval finds a same-grade replacement for any vacated NIGHT slot and re-runs repair.
 
-1. **Night shifts** — assign exactly 1 Junior + 1 Senior per day, distributed evenly (max 5–6 nights per doctor), no consecutive nights
-2. **Post-night OFFs** — any doctor on NIGHT on day D gets day D+1 forced to OFF
-3. **Weekend Offs (WO)** — 6–7 WOs per doctor, spread with minimum gaps; only placed when at least one other same-grade doctor remains available for morning
-4. **Morning fill** — remaining unassigned days become MORNING
-5. **Repair** — if any day is short on morning coverage, a WO is converted to MORNING
-
-When a leave is approved, the engine finds an eligible same-grade replacement for the vacated night shift and re-runs repair on the affected day.
-
----
-
-## API Reference
+## API
 
 ```
-POST   /auth/login
-POST   /auth/refresh
+POST  /api/auth/login
+POST  /api/auth/refresh
 
-GET    /users                    admin only
-POST   /users                    admin only
-DELETE /users/:id                admin only
+GET   /api/users                   admin
+POST  /api/users                   admin
+DELETE /api/users/:id              admin
 
-POST   /roster/generate          admin — generate for month/year
-GET    /roster/:month/:year      returns 404 for unpublished (doctors)
-PUT    /roster/:id/publish
-PUT    /roster/shift/:id         admin — manual shift override
-GET    /roster                   admin — list all rosters
+POST  /api/roster/generate         admin
+GET   /api/roster                  admin — list all
+GET   /api/roster/:month/:year
+PUT   /api/roster/:id/publish
+PUT   /api/roster/shift/:id        admin — manual override
 
-POST   /leave                    doctor — submit leave
-GET    /leave                    admin: all leaves · doctor: own leaves
-PUT    /leave/:id/approve        admin — triggers roster repair
-PUT    /leave/:id/reject
+POST  /api/leave                   doctor
+GET   /api/leave
+PUT   /api/leave/:id/approve       admin
+PUT   /api/leave/:id/reject        admin
 ```
-
----
-
-## Shift Color Coding
-
-| Shift | Color |
-|---|---|
-| MORNING | Sky blue |
-| NIGHT | Indigo |
-| OFF | Slate |
-| WO (Weekend Off) | Emerald |

@@ -35,7 +35,16 @@ export default function TeamRosterPage() {
         onYearChange={setYear}
       />
 
-      <div className="mb-4">
+      <div className="flex items-center justify-between mb-4">
+        {/* Legend */}
+        <div className="flex gap-4 text-xs">
+          {[['M', 'bg-sky-100 text-sky-700 border-sky-200', 'Morning'], ['N', 'bg-indigo-100 text-indigo-700 border-indigo-200', 'Night'], ['O', 'bg-slate-100 text-slate-500 border-slate-200', 'Off'], ['WO', 'bg-emerald-100 text-emerald-700 border-emerald-200', 'Weekly Off'], ['L', 'bg-rose-100 text-rose-700 border-rose-200', 'Leave']].map(([abbr, cls, label]) => (
+            <div key={abbr} className="flex items-center gap-1.5">
+              <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-semibold border ${cls}`}>{abbr}</span>
+              <span className="text-slate-500 dark:text-gray-400">{label}</span>
+            </div>
+          ))}
+        </div>
         <input
           type="text"
           placeholder="Search doctor..."
@@ -43,16 +52,6 @@ export default function TeamRosterPage() {
           onChange={e => setSearch(e.target.value)}
           className="px-3 py-2 rounded-lg border border-slate-200 dark:border-gray-600 text-sm bg-white dark:bg-gray-700 text-slate-900 dark:text-gray-100 placeholder:text-slate-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-56"
         />
-      </div>
-
-      {/* Legend */}
-      <div className="flex gap-4 mb-4 text-xs">
-        {[['M', 'bg-sky-100 text-sky-700 border-sky-200', 'Morning'], ['N', 'bg-indigo-100 text-indigo-700 border-indigo-200', 'Night'], ['O', 'bg-slate-100 text-slate-500 border-slate-200', 'Off'], ['WO', 'bg-emerald-100 text-emerald-700 border-emerald-200', 'Weekly Off'], ['L', 'bg-rose-100 text-rose-700 border-rose-200', 'Leave']].map(([abbr, cls, label]) => (
-          <div key={abbr} className="flex items-center gap-1.5">
-            <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-semibold border ${cls}`}>{abbr}</span>
-            <span className="text-slate-500 dark:text-gray-400">{label}</span>
-          </div>
-        ))}
       </div>
 
       {roster && (

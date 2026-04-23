@@ -88,7 +88,7 @@ export default function RosterPage() {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-gray-100">Roster</h1>
           <p className="text-slate-500 text-sm mt-1">Generate and manage monthly schedules</p>
         </div>
-        <Button onClick={() => generateMutation.mutate()} loading={generateMutation.isPending} variant="secondary">
+        <Button onClick={() => generateMutation.mutate()} loading={generateMutation.isPending} variant="danger">
           Generate Roster
         </Button>
       </div>
